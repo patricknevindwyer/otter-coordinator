@@ -7,20 +7,28 @@ var async = require("async");
 // controller structures for 
 var RESOLVE_QUEUE = [];
 var SERVICE_CATALOG = {
-    "networkDNS": "http://localhost:5000",
-    "cachedDNS": "http://localhost:6000",
-    "googleDNS": "http://localhost:7000",
-    "openNICDNS": "http://localhost:9000"    
+    "dns": {
+        "networkDNS": "http://localhost:5000",
+        "cachedDNS": "http://localhost:6000",
+        "googleDNS": "http://localhost:7000",
+        "openNICDNS": "http://localhost:9000"
+    },
+    "ip": {
+        "asn": "http://localhost:11000"
+    }    
 };
 
 // Run loop for dispatching the queued resolve actions
 // to all of the resolvers
-function dispatchResolve(resolveData, next) {
+function dispatchResolve(resolveBlob, next) {
     
-    console.log("Beginning service dispatch");
+    var serviceGroup = resolveBlob.serviceGroup;
+    var resolveData = resolveBlob.payload;
+    
+    console.log("Beginning service dispatch for service group [%s]", serviceGroup);
     // loop through all of the SERVICE_CATALOG items
     async.each(
-        _.pairs(SERVICE_CATALOG),
+        _.pairs(SERVICE_CATALOG[serviceGroup]),
         
         // function to dispatch each of the services
         function (service, callback) {
@@ -70,14 +78,27 @@ function checkDispatch() {
 }
 checkDispatch();
 
+/*
+    The default resolve calls DNS resolve service group. This is analagous to calling
+    the /resolve/dns endpoint.
+*/
 router.post('/resolve', function (req, res, next) {
     var resolveObj = req.body;
     console.log("Received JSON blob for resolution dispatch\n\tuuid: %s", resolveObj.uuid);
     
-    RESOLVE_QUEUE.push(resolveObj);
+    RESOLVE_QUEUE.push({"serviceGroup": "dns", "payload": resolveObj});
     
     res.json({error: false, msg: "ok"}); 
 })
 
+router.post(/^\/resolve\/([a-zA-Z0-9\-]+)\/?$/, function (req, res, next) {
+    var resolveObj = req.body;
+    var serviceGroup = req.params[0];
+    console.log("Received JSON blob for resolution dispatch\n\tuuid: %s\n\tservice group: %s", resolveObj.uuid, serviceGroup);
+    
+    RESOLVE_QUEUE.push({"serviceGroup": serviceGroup, "payload": resolveObj});
+    
+    res.json({error: false, msg: "ok"});
+})
 
 module.exports = router;
